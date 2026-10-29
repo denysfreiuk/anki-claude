@@ -26,8 +26,9 @@ jobs:
       run:
         working-directory: plugins/ankiclaude/server
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      # setup-uv publishes only immutable full-version tags (no @v10).
+      - uses: astral-sh/setup-uv@v10.3.0
       - name: Tests (fake AnkiConnect, no Anki needed)
         run: uv run --python ${{ matrix.python }} python -m pytest -q
       - name: The launcher installs pinned dependencies and imports the server
@@ -48,8 +49,8 @@ jobs:
       run:
         working-directory: tests/js
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -61,8 +62,8 @@ jobs:
     name: Plugin and marketplace manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - name: claude plugin validate
