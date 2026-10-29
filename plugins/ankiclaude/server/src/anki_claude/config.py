@@ -32,6 +32,7 @@ class Config:
     max_cards_per_batch: int = 15
     promote_after_days: int = 3
     auto_sync: bool = True
+    tts: bool = True
     review_reminder: bool = True
     sound_on_stop: bool = False
     env_file: Path | None = None
@@ -50,6 +51,7 @@ class Config:
             "max_cards_per_batch": self.max_cards_per_batch,
             "promote_after_days": self.promote_after_days,
             "auto_sync": self.auto_sync,
+            "tts": self.tts,
             "review_reminder": self.review_reminder,
             "sound_on_stop": self.sound_on_stop,
             "env_file": str(self.env_file) if self.env_file else None,
@@ -173,6 +175,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
         max_cards_per_batch=get_int("ANKI_MAX_CARDS_PER_BATCH", 15, 1, 50),
         promote_after_days=get_int("ANKI_PROMOTE_AFTER_DAYS", 3, 1, 60),
         auto_sync=get_bool("ANKI_AUTO_SYNC", True),
+        tts=get_bool("ANKI_TTS", True),
         review_reminder=get_bool("ANKI_REVIEW_REMINDER", True),
         sound_on_stop=get_bool("ANKI_SOUND_ON_STOP", False),
         env_file=env_file,

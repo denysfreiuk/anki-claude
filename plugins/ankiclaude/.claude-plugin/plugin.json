@@ -1,7 +1,7 @@
 {
   "name": "ankiclaude",
   "displayName": "Anki&Claude",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Створює, редагує та організовує картки Anki за принципами інтервальних повторень, активного пригадування і навчання в контексті (через AnkiConnect).",
   "author": {
     "name": "Denys Freiuk",
@@ -76,6 +76,12 @@
       "type": "boolean",
       "title": "Автоматична синхронізація",
       "description": "Синхронізувати з AnkiWeb після додавання й редагування карток.",
+      "default": true
+    },
+    "tts": {
+      "type": "boolean",
+      "title": "Озвучка англійських слів",
+      "description": "Кнопка ▶ і автоозвучка слова в картках. На Windows потрібен встановлений голос: Параметри → Час і мова → Мовлення → Додати голоси → English (United States). Якщо Anki пише про помилку TTS — вимкни і запусти ensure_note_types.",
       "default": true
     },
     "review_reminder": {

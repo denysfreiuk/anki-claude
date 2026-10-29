@@ -99,6 +99,24 @@ def test_back_sides_mark_themselves_before_front_side_scripts_run() -> None:
                 assert template.back.index('id="ac-back"') < template.back.index("{{FrontSide}}"), template.name
 
 
+def test_speech_can_be_turned_off() -> None:
+    with_tts = [t.front + t.back for t in SPECS["vocab"].templates]
+    assert sum("{{tts en_US:Word}}" in side for side in with_tts) == 2
+    assert "{{tts en_US:Forms}}" in with_tts[2]
+    quiet = build_specs("uk", tts=False)
+    for spec in quiet.values():
+        for t in spec.templates:
+            assert "{{tts" not in t.front + t.back and "ac-tts" not in t.front + t.back
+
+
+async def test_turning_speech_off_updates_templates_without_full_sync(fake: FakeAnkiConnect, make_anki) -> None:
+    await make_anki(fake).note_types.ensure()
+    report = await make_anki(fake, ANKI_TTS="false").note_types.ensure()
+    assert report["updated"] == ["AC Vocab"]
+    assert report["full_sync_required"] is False
+    assert all("{{tts" not in t["front"] + t["back"] for t in fake.note_types["AC Vocab"]["templates"])
+
+
 def test_css_supports_night_mode_and_phones() -> None:
     css = SPECS["vocab"].css
     assert ".nightMode" in css and ".night_mode" in css

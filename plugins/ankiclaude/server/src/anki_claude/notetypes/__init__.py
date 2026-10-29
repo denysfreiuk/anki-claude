@@ -4,6 +4,7 @@ Templates live in templates/*.html with three kinds of build-time placeholders
 (Anki's own {{…}} syntax is left alone):
   [[ac:examples]]       hidden Example1–3 block the vocab script picks from
   [[ac:script NAME]]    inline <script> with js/NAME.js (vocab also gets Anki-Persistence)
+  [[ac:tts FIELD]]      Anki text-to-speech of FIELD, or nothing when speech is turned off
   [[label:KEY]]         a label in the configured explanation language
 """
 
@@ -102,7 +103,7 @@ def _script(name: str) -> str:
     return f"<script>\n{code}\n</script>"
 
 
-def render_template(text: str, language: str) -> str:
+def render_template(text: str, language: str, tts: bool = True) -> str:
     labels = LABELS.get(language, LABELS["en"])
 
     def label(match: re.Match) -> str:
@@ -111,6 +112,11 @@ def render_template(text: str, language: str) -> str:
         return labels[match.group(1)]
 
     text = text.replace("[[ac:examples]]", EXAMPLES_BLOCK)
+    text = re.sub(
+        r"[ \t]*\[\[ac:tts (\w+)\]\]\n?",
+        lambda m: f'  <div class="ac-tts">{{{{tts en_US:{m.group(1)}}}}}</div>\n' if tts else "",
+        text,
+    )
     text = re.sub(r"\[\[ac:script (\w+)\]\]", lambda m: _script(m.group(1)), text)
     text = re.sub(r"\[\[label:(\w+)\]\]", label, text)
     leftover = re.search(r"\[\[(ac|label):[^\]]*\]\]", text)
@@ -119,17 +125,16 @@ def render_template(text: str, language: str) -> str:
     return text.strip() + "\n"
 
 
-def _template(name: str, file: str, deck: str | None, language: str) -> TemplateSpec:
-    return TemplateSpec(
-        name=name,
-        front=render_template(_read(f"templates/{file}.front.html"), language),
-        back=render_template(_read(f"templates/{file}.back.html"), language),
-        deck=deck,
-    )
-
-
-def build_specs(language: str = "uk") -> dict[str, NoteTypeSpec]:
+def build_specs(language: str = "uk", tts: bool = True) -> dict[str, NoteTypeSpec]:
     css = _read("style.css")
+
+    def _template(name: str, file: str, deck: str | None, language: str) -> TemplateSpec:
+        return TemplateSpec(
+            name=name,
+            front=render_template(_read(f"templates/{file}.front.html"), language, tts),
+            back=render_template(_read(f"templates/{file}.back.html"), language, tts),
+            deck=deck,
+        )
 
     def spec(key, name, fields, required, templates, kind="normal", deck=None):
         return NoteTypeSpec(key, name, kind, tuple(fields), tuple(required), tuple(templates), css, deck)
