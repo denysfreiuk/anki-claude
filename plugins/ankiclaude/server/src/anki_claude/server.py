@@ -5,17 +5,19 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import Annotated, Any, TypeVar
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
+from pydantic import Field
 
 from . import __version__
 from .anki import Anki
 from .ankiconnect import AnkiConnect
 from .config import load_config
 from .errors import AnkiError
+from .notes import NoteIn
 
 T = TypeVar("T")
 
@@ -26,6 +28,7 @@ INSTRUCTIONS = """\
 """
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
+WRITES = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False)
 
 
 def build_server(get_anki: Callable[[], Anki]) -> MCPServer:
@@ -70,6 +73,65 @@ def build_server(get_anki: Callable[[], Anki]) -> MCPServer:
         Помилка означає, що синхронізація НЕ відбулася: передай користувачу її текст і підказку.
         """
         return await run(lambda anki: anki.sync(force=force))
+
+    @server.tool(annotations=READ_ONLY)
+    async def list_decks() -> dict[str, Any]:
+        """Колоди під кореневою: пресет, ліміти нових/повторень на день, скільки карток
+        нових / у навчанні / на повторення сьогодні, усього карток."""
+        return await run(lambda anki: anki.decks.overview())
+
+    @server.tool(annotations=WRITES)
+    async def setup_decks() -> dict[str, Any]:
+        """Створює стандартну структуру колод (корінь, English::EN-UA/UA-EN/Distinctions, ML, Uni)
+        і окремий пресет для кожної гілки з лімітами нових карток. Ідемпотентно: наявне не ламає,
+        змінені користувачем ліміти не скидає. Ліміт кореня й English = сума підколод."""
+        return await run(lambda anki: anki.decks.setup())
+
+    @server.tool(annotations=WRITES)
+    async def create_deck(deck: str) -> dict[str, Any]:
+        """Створює колоду під кореневою (напр. Code::Python, Uni::Calculus) з пресетом її гілки.
+        Створюй лише тоді, коли в неї вже йдуть картки — порожніх колод не треба."""
+
+        async def call(anki: Anki) -> dict[str, Any]:
+            name, created = await anki.decks.ensure(deck)
+            return {"deck": name, "created": created}
+
+        return await run(call)
+
+    @server.tool(annotations=WRITES)
+    async def set_deck_options(
+        deck: str,
+        new_per_day: Annotated[int | None, Field(ge=0, le=9999)] = None,
+        reviews_per_day: Annotated[int | None, Field(ge=0, le=9999)] = None,
+    ) -> dict[str, Any]:
+        """Змінює денні ліміти колоди (нових і повторень). Зміна йде в пресет колоди: якщо його
+        поділяють інші колоди гілки (also_affects), ліміт зміниться і в них. Ліміт кореня
+        й English перераховується автоматично."""
+        return await run(lambda anki: anki.decks.set_options(deck, new_per_day, reviews_per_day))
+
+    @server.tool(annotations=READ_ONLY)
+    async def list_note_types() -> dict[str, Any]:
+        """Типи нотаток AC: чи є в колекції і чи актуальні, їхні поля; інші типи нотаток колекції."""
+        return await run(lambda anki: anki.note_types.overview())
+
+    @server.tool(annotations=WRITES)
+    async def ensure_note_types(dry_run: bool = False) -> dict[str, Any]:
+        """Створює відсутні типи нотаток AC (Concept, Cloze, Formula, Code, Vocab, Distinction) і оновлює
+        застарілі: шаблони, CSS, колоду шаблону, медіафайли. Поля не видаляє. dry_run=true — лише показати,
+        що зміниться. Якщо full_sync_required=true — попередь користувача: наступна синхронізація буде повною."""
+        return await run(lambda anki: anki.note_types.ensure(dry_run=dry_run))
+
+    @server.tool(annotations=WRITES)
+    async def add_notes(notes: list[NoteIn], known: bool = False) -> dict[str, Any]:
+        """Додає нотатки пакетом і повертає звіт: added / duplicates / errors / decks_created.
+
+        Сервер перевіряє правила (≥2 приклади з <b>слово</b> у vocab, пропуск ___ у distinction,
+        {{c1::…}} у cloze, короткі пояснення, теги kebab-case), додає теги gen::claude і added::YYYY-MM,
+        кладе картки у свої колоди. У vocab картка UA→EN створюється призупиненою, доки EN→UA не
+        закріпиться (known=true — одразу активна); картка форм завжди чекає UA→EN.
+        Дублікати не додаються — покажи їх користувачу. Після додавання сам синхронізує, якщо ввімкнено auto_sync.
+        """
+        return await run(lambda anki: anki.add_notes(notes, known=known))
 
     return server
 

@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import time
+from functools import cached_property
 from typing import Any
 
 from .ankiconnect import AnkiConnect
 from .config import Config
 from .constants import NOTE_TYPE_NAMES
-from .errors import AnkiActionError, AnkiError, AnkiOutdatedError, SyncError
+from .decks import Decks
+from .errors import CONFIGURE_HINT, AnkiActionError, AnkiError, AnkiOutdatedError, NotConfiguredError, SyncError
+from .models import NoteTypes
+from .notes import NoteIn, Notes
 
 SYNC_TIMEOUT = 180.0
 SYNC_POLL_INTERVAL = 0.5
@@ -19,6 +23,29 @@ class Anki:
     def __init__(self, config: Config, client: AnkiConnect) -> None:
         self.config = config
         self.client = client
+
+    @cached_property
+    def decks(self) -> Decks:
+        if not self.config.root_deck:
+            raise NotConfiguredError("Не задано кореневу колоду (root_deck).", CONFIGURE_HINT)
+        return Decks(self.client, self.config.root_deck)
+
+    @cached_property
+    def note_types(self) -> NoteTypes:
+        return NoteTypes(self.client, self.decks, self.config.explanation_language)
+
+    @cached_property
+    def notes(self) -> Notes:
+        return Notes(self.client, self.decks, self.config.explanation_language)
+
+    async def add_notes(self, notes: list[NoteIn], known: bool = False) -> dict[str, Any]:
+        report = await self.notes.add(notes, known=known)
+        if report["added"] and self.config.auto_sync:
+            try:
+                report["sync"] = await self.sync()
+            except SyncError as error:
+                report["sync"] = {"status": "failed", "reason": error.reason, "message": str(error)}
+        return report
 
     async def review_status(self) -> dict[str, Any]:
         """Whether the user is reviewing cards in desktop Anki right now. Read-only."""
@@ -113,9 +140,9 @@ class Anki:
 
         next_steps = []
         if root and not root_info["exists"]:
-            next_steps.append(f"Колоди «{root}» ще немає — її створить налаштування колод (setup_decks).")
+            next_steps.append(f"Колоди «{root}» ще немає — створи структуру колод: setup_decks.")
         if not all(note_types.values()):
-            next_steps.append("Типи нотаток AC ще не створені — їх створить ensure_note_types.")
+            next_steps.append("Не всі типи нотаток AC створені — запусти ensure_note_types.")
 
         return {
             "ok": True,

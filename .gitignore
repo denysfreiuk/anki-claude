@@ -24,3 +24,6 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local launch configs (paths are machine-specific)
+.claude/launch.json

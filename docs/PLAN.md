@@ -40,6 +40,20 @@
   командою `claude plugin update ankiclaude@ankiclaude` + новий чат.
 - Тести лежать у `plugins/ankiclaude/server/tests/`; запуск: `uv run python -m pytest`.
 
+### Знахідки етапу 3 (2026-10-29)
+- Колоди, пресети `AC · …` і 6 типів нотаток створені у твоїй Anki; повторний `ensure_note_types`
+  нічого не змінює. Створення типів нотаток і колод **не** вимагає повної синхронізації (перевірено).
+- Deck Override у шаблонах (API v1) працює: Recognition → EN-UA, Production і Forms → UA-EN,
+  Distinction → Distinctions — без `changeDeck`. Без v1 картки переносить `add_notes`.
+- `addNotes` у новому AnkiConnect атомарний: одна погана нотатка зриває весь пакет, тому спершу
+  `canAddNotesWithErrorDetail`, потім додаються лише придатні.
+- JS шаблонів перевірено в браузері на картках, які відрендерила сама Anki (`cards.render`), у режимі
+  «лицьова → зворот на одній сторінці», як в Anki desktop: 40/40 той самий приклад на звороті для всіх
+  vocab-карток; вибір випадковий; Production бере приклади з базовою формою; Forms — з іншою формою.
+- `tools/preview.py` — галерея карток (телефон/комп'ютер, світла/нічна) з живої Anki, для перевірки
+  дизайну і скріншотів README.
+- Нове поле `Source` додано також у Formula і Code (щоб не міняти структуру пізніше).
+
 ## 0. Що я перевірив перед планом
 
 ### Claude Code (документація code.claude.com, CLI у тебе — v2.1.274)

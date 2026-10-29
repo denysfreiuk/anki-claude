@@ -11,9 +11,17 @@ async def test_tools_are_registered(fake: FakeAnkiConnect, make_anki) -> None:
     anki = make_anki(fake)
     async with Client(build_server(lambda: anki)) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-    assert set(tools) == {"check_connection", "get_config", "review_status", "sync"}
-    assert tools["check_connection"].annotations.read_only_hint is True
-    assert tools["sync"].annotations.read_only_hint is False
+    assert set(tools) == {
+        "check_connection", "get_config", "review_status", "sync",
+        "list_decks", "setup_decks", "create_deck", "set_deck_options",
+        "list_note_types", "ensure_note_types", "add_notes",
+    }
+    for name in ("check_connection", "get_config", "review_status", "list_decks", "list_note_types"):
+        assert tools[name].annotations.read_only_hint is True, name
+    for name in ("sync", "setup_decks", "create_deck", "set_deck_options", "ensure_note_types", "add_notes"):
+        assert tools[name].annotations.read_only_hint is False, name
+    note_schema = tools["add_notes"].input_schema["$defs"]["NoteIn"]
+    assert note_schema["properties"]["type"]["enum"] == ["concept", "cloze", "formula", "code", "vocab", "distinction"]
 
 
 async def test_check_connection_returns_structured_report(fake: FakeAnkiConnect, make_anki) -> None:
