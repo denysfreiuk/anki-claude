@@ -24,7 +24,7 @@ LABELS = {
     "uk": {
         "why_word": "Чому саме це слово",
         "collocations": "Сполучення",
-        "hint": "Підказка:",
+        "hint": "Підказка",
         "type_lemma": "Введи словникову форму",
         "name_forms": "Назви форми",
         "explanation": "Чому так",
@@ -37,7 +37,7 @@ LABELS = {
     "en": {
         "why_word": "Why this word",
         "collocations": "Collocations",
-        "hint": "Hint:",
+        "hint": "Hint",
         "type_lemma": "Type the dictionary form",
         "name_forms": "Name the forms",
         "explanation": "Why",

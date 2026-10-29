@@ -120,6 +120,21 @@ test("the production back reveals the word in the same sentence", () => {
   assert.equal(back.querySelector(".ac-hl").textContent, "reluctant");
 });
 
+test("production: the hint is a closed spoiler and opening it gives focus back to the typed answer", async () => {
+  const dom = page();
+  const hint = '<details class="ac-hint"><summary>Підказка</summary><div class="ac-hint-text">r…</div></details>';
+  show(dom, side({ ...RELUCTANT, mode: "blank", key: "prod" }) + hint + '<input id="typeans">', VOCAB);
+  const doc = dom.window.document;
+  const details = doc.querySelector("details.ac-hint");
+  assert.equal(details.open, false);
+  doc.querySelector("summary").focus();
+  const toggled = new Promise((resolve) => details.addEventListener("toggle", resolve, { once: true }));
+  doc.querySelector("summary").click();
+  await Promise.race([toggled, new Promise((_, reject) => setTimeout(() => reject(new Error("no toggle")), 1000))]);
+  assert.equal(details.open, true);
+  assert.equal(doc.activeElement.id, "typeans");
+});
+
 test("the forms card prefers examples that show another form", () => {
   for (let i = 0; i < 20; i++) {
     const back = show(page(), side({ ...GIVE_UP, mode: "forms", key: "forms", back: true }), VOCAB);

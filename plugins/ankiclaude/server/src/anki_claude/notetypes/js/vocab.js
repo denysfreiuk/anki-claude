@@ -115,4 +115,14 @@
     var picked = choose(pool, "ac-vocab:" + target.getAttribute("data-ac-key"), word);
     render(target, picked, mode === "blank" ? "blank" : "highlight");
   }
+
+  // Opening the hint spoiler must not take focus from the typed answer: Enter checks it.
+  var hint = document.querySelector("details.ac-hint");
+  var typed = document.getElementById("typeans");
+  if (hint && typed && !hint.getAttribute("data-ac-done")) {
+    hint.setAttribute("data-ac-done", "1");
+    hint.addEventListener("toggle", function () {
+      typed.focus();
+    });
+  }
 })();

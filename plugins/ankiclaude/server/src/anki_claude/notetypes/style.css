@@ -185,11 +185,40 @@
   vertical-align: baseline;
 }
 
+/* Hint behind a spoiler: closed until tapped, so it does not give the word away. */
 .ac-hint {
   text-align: center;
   color: var(--ac-muted);
   font-size: 0.85em;
   margin-top: 12px;
+}
+
+.ac-hint summary {
+  display: inline-block;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 12px;
+  border: 1px dashed var(--ac-border);
+  border-radius: 999px;
+  font-size: 0.9em;
+  color: var(--ac-faint);
+}
+
+.ac-hint summary::-webkit-details-marker {
+  display: none;
+}
+
+.ac-hint summary::before {
+  content: "▸ ";
+}
+
+.ac-hint[open] summary::before {
+  content: "▾ ";
+}
+
+.ac-hint-text {
+  margin-top: 6px;
 }
 
 .ac-forms {
@@ -223,10 +252,6 @@
   letter-spacing: 0.06em;
   color: var(--ac-faint);
   margin-bottom: 2px;
-}
-
-.ac-hint .ac-label {
-  display: inline;
 }
 
 .ac-source {
