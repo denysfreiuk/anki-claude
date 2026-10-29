@@ -43,7 +43,9 @@ class Anki:
 
     @cached_property
     def note_types(self) -> NoteTypes:
-        return NoteTypes(self.client, self.decks, self.config.explanation_language, self.config.tts)
+        return NoteTypes(
+            self.client, self.decks, self.config.explanation_language, self.config.tts, self.config.tts_lang
+        )
 
     @cached_property
     def notes(self) -> Notes:

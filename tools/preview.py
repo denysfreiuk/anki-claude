@@ -2,6 +2,9 @@
 
     python tools/preview.py OUT_DIR [--query "tag:status::sample"] [--url http://127.0.0.1:8765]
 
+Serve OUT_DIR over HTTP (python -m http.server) and open preview.html; for screenshots
+add ?only=0,3&theme=dark&width=680&bare=1 to show chosen cards without the controls.
+
 Fetches the cards' rendered HTML from AnkiConnect (API v1 cards.render, falling back
 to cardsInfo), then writes OUT_DIR/preview.html: every card's front and back at phone
 or desktop width, in light or night mode. Each back is shown the way Anki desktop
@@ -70,7 +73,16 @@ PAGE = r"""<!doctype html>
 <script id="data" type="application/json">__DATA__</script>
 <script>
 const CARDS = JSON.parse(document.getElementById("data").textContent);
-const state = { width: 375, theme: "light" };
+// URL parameters for screenshots: ?only=0,3&theme=dark&width=680&bare=1
+const params = new URLSearchParams(location.search);
+const state = { width: Number(params.get("width")) || 375, theme: params.get("theme") || "light" };
+const ONLY = params.get("only") ? params.get("only").split(",").map(Number) : null;
+const HEIGHT = Number(params.get("height")) || 560;
+// fixed=1: the same "random" example in every frame, so a front and a back screenshot match.
+const FIXED = params.get("fixed") ? "<script>Math.random = function () { return 0.34; };<\/script>" : "";
+if (params.get("bare")) {
+  document.head.insertAdjacentHTML("beforeend", "<style>header, .card-row h2 { display: none } body { padding: 10px 12px } .card-row { margin-bottom: 12px }</style>");
+}
 const MATHJAX = "__MATHJAX__";
 const PLAY = '<a class="replay-button soundLink" href="#" onclick="return false"><svg class="playImage" viewBox="0 0 64 64" width="40" height="40"><circle cx="32" cy="32" r="29" fill="none" stroke="currentColor" stroke-width="3" opacity=".5"/><path d="M26 20 L46 32 L26 44 Z" fill="currentColor" opacity=".7"/></svg></a>';
 
@@ -92,7 +104,7 @@ function reviewer(card, side) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>window.MathJax = { tex: { inlineMath: [["\\\\(", "\\\\)"]], displayMath: [["\\\\[", "\\\\]"]] } };<\/script>
 <script src="${MATHJAX}" async><\/script>
-<style>body { margin: 0; } #qa { min-height: 100vh; }</style></head>
+<style>body { margin: 0; } #qa { min-height: 100vh; }</style>${FIXED}</head>
 <body class="card card${card.ord + 1}${night}"><div id="qa"></div>
 <script>
   const SIDES = ${JSON.stringify(sides.map((s) => ankiSubstitute(card[s], s))).replace(/<\//g, "<\\/")};
@@ -115,7 +127,8 @@ function draw() {
   document.body.classList.toggle("dark", state.theme === "dark");
   const root = document.getElementById("cards");
   root.innerHTML = "";
-  CARDS.forEach(function (card) {
+  CARDS.forEach(function (card, index) {
+    if (ONLY && !ONLY.includes(index)) return;
     const row = document.createElement("section");
     row.className = "card-row";
     row.innerHTML = `<h2>${card.model} · ${card.template} · ${card.deck}</h2><div class="sides"></div>`;
@@ -124,6 +137,7 @@ function draw() {
       box.innerHTML = `<p class="side-label">${side === "q" ? "Лицьова" : "Зворот"}</p>`;
       const frame = document.createElement("iframe");
       frame.style.width = state.width + "px";
+      frame.style.height = HEIGHT + "px";
       frame.setAttribute("data-card", card.id);
       frame.setAttribute("data-side", side);
       frame.srcdoc = reviewer(card, side);

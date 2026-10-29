@@ -109,6 +109,18 @@ def test_speech_can_be_turned_off() -> None:
             assert "{{tts" not in t.front + t.back and "ac-tts" not in t.front + t.back
 
 
+def test_speech_language_is_configurable() -> None:
+    british = build_specs("uk", tts_lang="en_GB")["vocab"].templates
+    assert "{{tts en_GB:Word}}" in british[0].front and "{{tts en_GB:Forms}}" in british[2].back
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("en-gb", "en_GB"), ("EN_us", "en_US"), ("british", "en_US")])
+def test_speech_language_config_is_normalized(raw: str, expected: str) -> None:
+    from anki_claude.config import load_config
+
+    assert load_config({"ANKI_TTS_LANG": raw}).tts_lang == expected
+
+
 async def test_turning_speech_off_updates_templates_without_full_sync(fake: FakeAnkiConnect, make_anki) -> None:
     await make_anki(fake).note_types.ensure()
     report = await make_anki(fake, ANKI_TTS="false").note_types.ensure()

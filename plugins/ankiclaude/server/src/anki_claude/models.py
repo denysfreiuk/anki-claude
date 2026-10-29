@@ -11,10 +11,10 @@ from .notetypes import NoteTypeSpec, build_specs, media_files
 
 
 class NoteTypes:
-    def __init__(self, client: AnkiConnect, decks: Decks, language: str, tts: bool = True) -> None:
+    def __init__(self, client: AnkiConnect, decks: Decks, language: str, tts: bool = True, tts_lang: str = "en_US") -> None:
         self.client = client
         self.decks = decks
-        self.specs = build_specs(language, tts)
+        self.specs = build_specs(language, tts, tts_lang)
 
     async def overview(self) -> dict[str, Any]:
         report = await self.ensure(dry_run=True)

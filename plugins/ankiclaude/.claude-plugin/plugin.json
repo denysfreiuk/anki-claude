@@ -1,7 +1,7 @@
 {
   "name": "ankiclaude",
   "displayName": "Anki&Claude",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Створює, редагує та організовує картки Anki за принципами інтервальних повторень, активного пригадування і навчання в контексті (через AnkiConnect).",
   "author": {
     "name": "Denys Freiuk",
@@ -21,7 +21,7 @@
     "anki_connect_url": {
       "type": "string",
       "title": "Адреса AnkiConnect",
-      "description": "Адреса add-on AnkiConnect у твоїй Anki. Змінюй, лише якщо міняв webBindPort у налаштуваннях AnkiConnect.",
+      "description": "Адреса add-on AnkiConnect. Змінюй, лише якщо міняв webBindPort у налаштуваннях AnkiConnect.",
       "default": "http://127.0.0.1:8765"
     },
     "anki_connect_key": {
@@ -81,8 +81,15 @@
     "tts": {
       "type": "boolean",
       "title": "Озвучка англійських слів",
-      "description": "Кнопка ▶ і автоозвучка слова в картках. На Windows потрібен встановлений голос: Параметри → Час і мова → Мовлення → Додати голоси → English (United States). Якщо Anki пише про помилку TTS — вимкни і запусти ensure_note_types.",
+      "description": "Кнопка ▶ і автоозвучка слова в картках. На Windows потрібен встановлений голос мови озвучки (див. README, «Усунення проблем»). Якщо Anki пише про помилку TTS — вимкни і запусти ensure_note_types.",
       "default": true
+    },
+    "tts_lang": {
+      "type": "string",
+      "title": "Мова озвучки",
+      "description": "Американська (en_US) чи британська (en_GB) вимова. Після зміни — ensure_note_types.",
+      "options": ["en_US", "en_GB"],
+      "default": "en_US"
     },
     "review_reminder": {
       "type": "boolean",

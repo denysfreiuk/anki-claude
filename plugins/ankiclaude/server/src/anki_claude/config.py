@@ -7,6 +7,7 @@ userConfig), then from an optional .env file, then from defaults.
 from __future__ import annotations
 
 import os
+import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -33,6 +34,7 @@ class Config:
     promote_after_days: int = 3
     auto_sync: bool = True
     tts: bool = True
+    tts_lang: str = "en_US"
     review_reminder: bool = True
     sound_on_stop: bool = False
     env_file: Path | None = None
@@ -52,6 +54,7 @@ class Config:
             "promote_after_days": self.promote_after_days,
             "auto_sync": self.auto_sync,
             "tts": self.tts,
+            "tts_lang": self.tts_lang,
             "review_reminder": self.review_reminder,
             "sound_on_stop": self.sound_on_stop,
             "env_file": str(self.env_file) if self.env_file else None,
@@ -153,6 +156,12 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
             return default
         return raw.upper()
 
+    tts_lang = (get("ANKI_TTS_LANG") or "en_US").replace("-", "_")
+    if not re.fullmatch(r"[a-z]{2}_[A-Za-z]{2}", tts_lang):
+        warnings.append(f"ANKI_TTS_LANG={tts_lang!r} — очікую формат en_US, використовую en_US.")
+        tts_lang = "en_US"
+    tts_lang = tts_lang[:3].lower() + tts_lang[3:].upper()
+
     root_deck = get("ANKI_ROOT_DECK")
     if root_deck is not None:
         root_deck = normalize_root_deck(root_deck) or None
@@ -176,6 +185,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
         promote_after_days=get_int("ANKI_PROMOTE_AFTER_DAYS", 3, 1, 60),
         auto_sync=get_bool("ANKI_AUTO_SYNC", True),
         tts=get_bool("ANKI_TTS", True),
+        tts_lang=tts_lang,
         review_reminder=get_bool("ANKI_REVIEW_REMINDER", True),
         sound_on_stop=get_bool("ANKI_SOUND_ON_STOP", False),
         env_file=env_file,

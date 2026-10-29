@@ -103,7 +103,7 @@ def _script(name: str) -> str:
     return f"<script>\n{code}\n</script>"
 
 
-def render_template(text: str, language: str, tts: bool = True) -> str:
+def render_template(text: str, language: str, tts: bool = True, tts_lang: str = "en_US") -> str:
     labels = LABELS.get(language, LABELS["en"])
 
     def label(match: re.Match) -> str:
@@ -114,7 +114,7 @@ def render_template(text: str, language: str, tts: bool = True) -> str:
     text = text.replace("[[ac:examples]]", EXAMPLES_BLOCK)
     text = re.sub(
         r"[ \t]*\[\[ac:tts (\w+)\]\]\n?",
-        lambda m: f'  <div class="ac-tts">{{{{tts en_US:{m.group(1)}}}}}</div>\n' if tts else "",
+        lambda m: f'  <div class="ac-tts">{{{{tts {tts_lang}:{m.group(1)}}}}}</div>\n' if tts else "",
         text,
     )
     text = re.sub(r"\[\[ac:script (\w+)\]\]", lambda m: _script(m.group(1)), text)
@@ -125,14 +125,14 @@ def render_template(text: str, language: str, tts: bool = True) -> str:
     return text.strip() + "\n"
 
 
-def build_specs(language: str = "uk", tts: bool = True) -> dict[str, NoteTypeSpec]:
+def build_specs(language: str = "uk", tts: bool = True, tts_lang: str = "en_US") -> dict[str, NoteTypeSpec]:
     css = _read("style.css")
 
     def _template(name: str, file: str, deck: str | None, language: str) -> TemplateSpec:
         return TemplateSpec(
             name=name,
-            front=render_template(_read(f"templates/{file}.front.html"), language, tts),
-            back=render_template(_read(f"templates/{file}.back.html"), language, tts),
+            front=render_template(_read(f"templates/{file}.front.html"), language, tts, tts_lang),
+            back=render_template(_read(f"templates/{file}.back.html"), language, tts, tts_lang),
             deck=deck,
         )
 

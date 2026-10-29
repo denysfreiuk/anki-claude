@@ -27,3 +27,6 @@ Thumbs.db
 
 # Local launch configs (paths are machine-specific)
 .claude/launch.json
+
+# JS test dependencies
+node_modules/
