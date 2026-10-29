@@ -19,6 +19,24 @@
   додавання/редагування; плагін не заважає, якщо ти саме повторюєш у desktop-Anki (§3).
 - GitHub: публічний репо з MIT на етапі 5; комітимо з етапу 2.
 
+### Знахідки етапу 2 (2026-10-29)
+- **AnkiConnect 2026 має два API**: класичний v6 (`POST /`) і новий v1 (JSON-RPC 2.0, `POST /api/v1`,
+  94 методи). Плагін працює через v6 (є в усіх), а v1 бере, лише якщо він є, для того, чого v6 не вміє:
+  sync зі статусом операції, `reviewer.get`, а на етапі 3 — **Deck Override у шаблонах**
+  (`noteTypes.create/update` приймають `deck` для шаблону). Без v1 лишається маршрутизація через `changeDeck`.
+- **v6 `sync` не чекає завершення**: повертається одразу, і помилку не видно. Тому без v1 sync іде
+  всередині `multi`, де AnkiConnect його дочікується. З v1 — `collection.sync` + опитування `operations.get`.
+- **Повна синхронізація**: AnkiConnect сам показує в Anki діалог Upload/Download (стан `waitingForUser`).
+  Плагін це розпізнає і просить тебе обрати у вікні Anki. Зміна **структури** типу нотатки (нове поле,
+  шаблон) вимагає повної синхронізації, тому всі поля закладаю відразу; HTML/CSS шаблонів змінюю вільно.
+- **Smart App Control (Windows 11)** блокує непідписані `.exe`, які uv кладе у `.venv`. Тому сервер не
+  використовує venv: `launch.py` (лише stdlib) один раз ставить залежності через `uv pip install --target`
+  у `${CLAUDE_PLUGIN_DATA}` і запускає їх базовим Python. Перший запуск ~6 с, далі ~2,5 с.
+- **`mcp` SDK 2.x**: FastMCP перейменовано на `MCPServer` (`mcp.server.mcpserver`) — це він.
+- Налаштування без діалогу: `claude plugin install ankiclaude@ankiclaude --config root_deck=Den`,
+  змінити потім: `claude plugin configure ankiclaude@ankiclaude`.
+- Тести лежать у `plugins/ankiclaude/server/tests/`; запуск: `uv run python -m pytest`.
+
 ## 0. Що я перевірив перед планом
 
 ### Claude Code (документація code.claude.com, CLI у тебе — v2.1.274)
