@@ -16,7 +16,10 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
+from .. import __version__
+
 HERE = Path(__file__).resolve().parent
+VERSION_MARKER = re.compile(r"/\* ankiclaude (\d+(?:\.\d+)*) \*/")
 HIGHLIGHT_VERSION = "11.11.1"
 HIGHLIGHT_MEDIA = f"_ac_highlight-{HIGHLIGHT_VERSION}.min.js"
 
@@ -125,8 +128,15 @@ def render_template(text: str, language: str, tts: bool = True, tts_lang: str = 
     return text.strip() + "\n"
 
 
+def made_by(css: str) -> str | None:
+    """The plugin version recorded in a note type's CSS, or None for types from before 0.4.2."""
+    match = VERSION_MARKER.search(css)
+    return match.group(1) if match else None
+
+
 def build_specs(language: str = "uk", tts: bool = True, tts_lang: str = "en_US") -> dict[str, NoteTypeSpec]:
-    css = _read("style.css")
+    # The version marker lets a newer plugin update the types and keeps an older one from rolling them back.
+    css = f"/* ankiclaude {__version__} */\n" + _read("style.css")
 
     def _template(name: str, file: str, deck: str | None, language: str) -> TemplateSpec:
         return TemplateSpec(

@@ -14,7 +14,7 @@ from .constants import NOTE_TYPE_NAMES
 from .decks import Decks
 from .insights import Insights
 from .errors import CONFIGURE_HINT, AnkiActionError, AnkiError, AnkiOutdatedError, NotConfiguredError, SyncError
-from .models import NoteTypes
+from .models import NoteTypes, update_hint
 from .notes import NoteIn, Notes
 from .promote import promote
 
@@ -27,6 +27,7 @@ class Anki:
         self.config = config
         self.client = client
         self.confirmations = Confirmations()
+        self._note_types_checked = False
 
     @cached_property
     def insights(self) -> Insights:
@@ -52,13 +53,34 @@ class Anki:
         return Notes(self.client, self.decks, self.config.explanation_language)
 
     async def add_notes(self, notes: list[NoteIn], known: bool = False) -> dict[str, Any]:
+        update = await self.keep_note_types_current()
         report = await self.notes.add(notes, known=known)
-        if report["added"] and self.config.auto_sync:
+        if update:
+            report["note_types_update"] = update
+        updated = bool(update) and update["status"] == "updated"
+        if (report["added"] or updated) and self.config.auto_sync:
             try:
                 report["sync"] = await self.sync()
             except SyncError as error:
                 report["sync"] = {"status": "failed", "reason": error.reason, "message": str(error)}
         return report
+
+    async def keep_note_types_current(self) -> dict[str, Any] | None:
+        """Once per server run, update the AC note types an earlier plugin version made.
+
+        Not while the user reviews in desktop Anki (the card on screen would change under them):
+        then it is tried again on the next call. A failure is reported, not raised, so that
+        adding cards still works.
+        """
+        if self._note_types_checked or not self.config.root_deck:
+            return None
+        if (await self.review_status())["reviewing"]:
+            return None
+        self._note_types_checked = True
+        try:
+            return await self.note_types.auto_update()
+        except AnkiError as error:
+            return {"status": "failed", "message": str(error)}
 
     async def review_status(self) -> dict[str, Any]:
         """Whether the user is reviewing cards in desktop Anki right now. Read-only."""
@@ -156,6 +178,10 @@ class Anki:
             next_steps.append(f"Колоди «{root}» ще немає — створи структуру колод: setup_decks.")
         if not all(note_types.values()):
             next_steps.append("Не всі типи нотаток AC створені — запусти ensure_note_types.")
+        elif root:
+            hint = update_hint(await self.note_types.ensure(dry_run=True))
+            if hint:
+                next_steps.append(hint)
 
         return {
             "ok": True,

@@ -47,8 +47,8 @@ def build_server(get_anki: Callable[[], Anki]) -> MCPServer:
         """Перевіряє, чи запущена Anki з AnkiConnect.
 
         Повертає версії AnkiConnect і Anki, активний профіль, стан кореневої колоди,
-        які типи нотаток AC уже є, чи користувач зараз повторює картки, попередження
-        конфігу і наступні кроки. Викликай першим, якщо щось не працює.
+        які типи нотаток AC уже є і чи вони від цієї версії плагіна, чи користувач зараз
+        повторює картки, попередження конфігу і наступні кроки. Викликай першим, якщо щось не працює.
         """
         return await run(lambda anki: anki.connection_report())
 
@@ -118,7 +118,9 @@ def build_server(get_anki: Callable[[], Anki]) -> MCPServer:
     async def ensure_note_types(dry_run: bool = False) -> dict[str, Any]:
         """Створює відсутні типи нотаток AC (Concept, Cloze, Formula, Code, Vocab, Distinction) і оновлює
         застарілі: шаблони, CSS, колоду шаблону, медіафайли. Поля не видаляє. dry_run=true — лише показати,
-        що зміниться. Якщо full_sync_required=true — попередь користувача: наступна синхронізація буде повною."""
+        що зміниться. Якщо full_sync_required=true — попередь користувача: наступна синхронізація буде повною.
+        Потрібен після зміни tts, tts_lang чи explanation_language; оновлення плагіна add_notes підхоплює сам.
+        Відмовляє, якщо типи зробила новіша версія плагіна: тоді треба оновити плагін."""
         return await run(lambda anki: anki.note_types.ensure(dry_run=dry_run))
 
     @server.tool(annotations=WRITES)
@@ -130,6 +132,8 @@ def build_server(get_anki: Callable[[], Anki]) -> MCPServer:
         кладе картки у свої колоди. У vocab картка UA→EN створюється призупиненою, доки EN→UA не
         закріпиться (known=true — одразу активна); картка форм завжди чекає UA→EN.
         Дублікати не додаються — покажи їх користувачу. Після додавання сам синхронізує, якщо ввімкнено auto_sync.
+        Перший виклик після оновлення плагіна сам оновлює типи нотаток AC (note_types_update): updated — скажи
+        користувачу одним рядком; needs_confirmation — спитай його (потрібна повна синхронізація).
         """
         return await run(lambda anki: anki.add_notes(notes, known=known))
 

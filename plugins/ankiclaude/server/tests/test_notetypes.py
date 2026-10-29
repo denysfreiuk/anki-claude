@@ -4,8 +4,11 @@ import re
 
 import pytest
 
+from anki_claude import __version__
 from anki_claude.constants import NOTE_TYPE_NAMES
-from anki_claude.notetypes import HIGHLIGHT_MEDIA, LABELS, build_specs, render_template
+from anki_claude.errors import AnkiError
+from anki_claude.notes import NoteIn
+from anki_claude.notetypes import HIGHLIGHT_MEDIA, LABELS, build_specs, made_by, render_template
 
 from .fake_ankiconnect import FakeAnkiConnect, front_has_content
 
@@ -189,6 +192,88 @@ async def test_ensure_updates_outdated_types_and_flags_full_sync(fake: FakeAnkiC
     assert vocab["fields"] == list(SPECS["vocab"].fields)
     assert vocab["css"] == SPECS["vocab"].css
     assert fake._deck_name(vocab["templates"][1]["did"]) == "Den::English::UA-EN"
+
+
+def made_by_plugin(fake: FakeAnkiConnect, version: str | None) -> None:
+    """Make the AC types look as if plugin `version` wrote them (None: before versions were recorded)."""
+    for note_type in fake.note_types.values():
+        if "/* ankiclaude " in note_type["css"]:
+            marker = f"/* ankiclaude {version} */\n" if version else ""
+            note_type["css"] = re.sub(r"/\* ankiclaude [\d.]+ \*/\n", marker, note_type["css"])
+    fake.note_types["AC Vocab"]["templates"][1]["front"] += "<!-- old -->"
+
+
+async def ready_types(fake: FakeAnkiConnect, make_anki, **env: str):
+    anki = make_anki(fake, **{"ANKI_AUTO_SYNC": "false", **env})
+    await anki.decks.setup()
+    await anki.note_types.ensure()
+    return anki
+
+
+def test_css_records_the_plugin_version() -> None:
+    assert made_by(SPECS["vocab"].css) == __version__
+    assert made_by("/* no marker */") is None
+
+
+@pytest.mark.parametrize("version", ["0.4.1", None])
+async def test_add_notes_updates_types_an_older_plugin_made_once(version, fake: FakeAnkiConnect, make_anki) -> None:
+    anki = await ready_types(fake, make_anki)
+    made_by_plugin(fake, version)
+    assert "оновляться самі" in " ".join((await anki.connection_report())["next_steps"])
+    assert (await anki.note_types.overview())["ac_note_types"]["AC Vocab"] == "застарів"
+
+    concept = NoteIn(type="concept", fields={"Front": "Що таке recall?", "Back": "TP / (TP + FN)"}, tags=["topic::ml::metrics"])
+    report = await anki.add_notes([concept])
+    update = report["note_types_update"]
+    assert update["status"] == "updated" and "AC Vocab" in update["note_types"]
+    assert fake.note_types["AC Vocab"]["templates"][1]["front"] == SPECS["vocab"].templates[1].front
+    assert made_by(fake.note_types["AC Vocab"]["css"]) == __version__
+
+    made_by_plugin(fake, version)
+    again = await anki.add_notes([NoteIn(type="concept", fields={"Front": "Що таке F1?", "Back": "2PR / (P + R)"})])
+    assert "note_types_update" not in again, "checked once per server run"
+
+
+async def test_types_from_a_newer_plugin_are_never_rolled_back(fake: FakeAnkiConnect, make_anki) -> None:
+    anki = await ready_types(fake, make_anki)
+    made_by_plugin(fake, "99.0.0")
+    changed = fake.note_types["AC Vocab"]["templates"][1]["front"]
+
+    assert await anki.keep_note_types_current() is None
+    with pytest.raises(AnkiError, match="новіша версія плагіна"):
+        await anki.note_types.ensure()
+    assert fake.note_types["AC Vocab"]["templates"][1]["front"] == changed
+    assert (await anki.note_types.overview())["ac_note_types"]["AC Vocab"] == "новіший за плагін (99.0.0)"
+    assert "старіший за типи нотаток" in " ".join((await anki.connection_report())["next_steps"])
+
+
+async def test_other_settings_of_the_same_version_wait_for_ensure(fake: FakeAnkiConnect, make_anki) -> None:
+    await ready_types(fake, make_anki)
+    anki = make_anki(fake, ANKI_TTS="false", ANKI_AUTO_SYNC="false")
+    assert await anki.keep_note_types_current() is None
+    assert any("{{tts" in t["front"] for t in fake.note_types["AC Vocab"]["templates"])
+    assert (await anki.note_types.overview())["ac_note_types"]["AC Vocab"] == "не збігається з налаштуваннями"
+
+
+async def test_an_update_that_needs_a_full_sync_asks_first(fake: FakeAnkiConnect, make_anki) -> None:
+    anki = await ready_types(fake, make_anki)
+    made_by_plugin(fake, "0.4.1")
+    fake.note_types["AC Vocab"]["fields"].remove("DrillForms")
+
+    update = await anki.keep_note_types_current()
+    assert update["status"] == "needs_confirmation"
+    assert "DrillForms" not in fake.note_types["AC Vocab"]["fields"], "nothing changed without the user"
+    assert "повну" in " ".join((await anki.connection_report())["next_steps"])
+
+
+async def test_no_update_while_the_user_reviews(fake: FakeAnkiConnect, make_anki) -> None:
+    anki = await ready_types(fake, make_anki)
+    made_by_plugin(fake, "0.4.1")
+    fake.reviewing = True
+    assert await anki.keep_note_types_current() is None
+    assert made_by(fake.note_types["AC Vocab"]["css"]) == "0.4.1"
+    fake.reviewing = False
+    assert (await anki.keep_note_types_current())["status"] == "updated"
 
 
 async def test_overview_reports_status(fake: FakeAnkiConnect, make_anki) -> None:
