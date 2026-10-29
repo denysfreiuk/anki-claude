@@ -39,6 +39,30 @@ def front_has_content(template: str, fields: dict[str, str]) -> bool:
     return False
 
 
+TOKEN = re.compile(r'\(|\)|[^\s()"]*"(?:[^"\\]|\\.)*"|[^\s()]+')
+
+
+def _unquote(term: str) -> str:
+    if term.startswith('"') and term.endswith('"'):
+        term = term[1:-1]
+    return term
+
+
+def _like(pattern: str, value: str) -> bool:
+    """Anki-style match: case-insensitive, * wildcard, backslash escapes."""
+    regex = ""
+    i = 0
+    while i < len(pattern):
+        ch = pattern[i]
+        if ch == "\\" and i + 1 < len(pattern):
+            regex += re.escape(pattern[i + 1])
+            i += 2
+            continue
+        regex += ".*" if ch == "*" else re.escape(ch)
+        i += 1
+    return re.fullmatch(regex, value, re.IGNORECASE | re.S) is not None
+
+
 def default_preset() -> dict:
     return {
         "id": 1, "name": "Типовий", "new": {"perDay": 20, "bury": False, "delays": [1.0, 10.0]},
@@ -266,9 +290,50 @@ class FakeAnkiConnect:
         if action == "findNotes":
             return self._find_notes(p["query"])
         if action == "findCards":
-            match = re.fullmatch(r"nid:([\d,]+)", p["query"])
-            wanted = {int(n) for n in match.group(1).split(",")} if match else set()
-            return sorted(cid for cid, c in self.cards.items() if c["note"] in wanted)
+            return self._find_cards(p["query"])
+        if action == "notesInfo":
+            out = []
+            for note_id in p["notes"]:
+                note = self.notes.get(note_id)
+                if note is None:
+                    out.append({})
+                    continue
+                fields = self.note_types[note["model"]]["fields"]
+                out.append({"noteId": note_id, "modelName": note["model"], "tags": list(note["tags"]),
+                            "fields": {name: {"value": note["fields"].get(name, ""), "order": i} for i, name in enumerate(fields)},
+                            "cards": self.card_ids(note_id)})
+            return out
+        if action == "updateNoteFields":
+            note = self.notes[p["note"]["id"]]
+            note["fields"].update(p["note"]["fields"])
+            self._generate_cards(p["note"]["id"])
+            return None
+        if action == "addTags":
+            for note_id in p["notes"]:
+                for tag in p["tags"].split():
+                    if tag not in self.notes[note_id]["tags"]:
+                        self.notes[note_id]["tags"].append(tag)
+            return None
+        if action == "removeTags":
+            for note_id in p["notes"]:
+                self.notes[note_id]["tags"] = [t for t in self.notes[note_id]["tags"] if t not in p["tags"].split()]
+            return None
+        if action == "deleteNotes":
+            for note_id in p["notes"]:
+                self.notes.pop(note_id, None)
+                for cid in [c for c, card in self.cards.items() if card["note"] == note_id]:
+                    del self.cards[cid]
+            return None
+        if action == "unsuspend":
+            for cid in p["cards"]:
+                self.cards[cid]["queue"] = 0
+            return True
+        if action == "getNumCardsReviewedToday":
+            return 5
+        if action == "getNumCardsReviewedByDay":
+            return [["2026-10-29", 5], ["2026-10-28", 12]]
+        if action == "getTags":
+            return sorted({t for n in self.notes.values() for t in n["tags"]})
         if action == "cardsInfo":
             return [{"cardId": cid, "note": self.cards[cid]["note"], "ord": self.cards[cid]["ord"],
                      "deckName": self.cards[cid]["deck"], "queue": self.cards[cid]["queue"],
@@ -304,19 +369,70 @@ class FakeAnkiConnect:
             return {"canAdd": False, "error": "cannot create note because it is a duplicate"}
         return {"canAdd": True}
 
+    # A small subset of Anki's search syntax: AND by space, OR, parentheses and the terms the plugin uses.
+
+    def _matches(self, card_id: int, tokens: list[str]) -> bool:
+        position = 0
+
+        def expr() -> bool:
+            nonlocal position
+            result = conj()
+            while position < len(tokens) and tokens[position].upper() == "OR":
+                position += 1
+                right = conj()
+                result = result or right
+            return result
+
+        def conj() -> bool:
+            nonlocal position
+            result = True
+            while position < len(tokens) and tokens[position] != ")" and tokens[position].upper() != "OR":
+                if tokens[position] == "(":
+                    position += 1
+                    value = expr()
+                    position += 1  # ")"
+                else:
+                    value = self._term(card_id, _unquote(tokens[position]))
+                    position += 1
+                result = result and value
+            return result
+
+        return expr()
+
+    def _term(self, card_id: int, term: str) -> bool:
+        card = self.cards[card_id]
+        note = self.notes[card["note"]]
+        field, _, value = term.partition(":")
+        value = _unquote(value)  # deck:"Den" — quotes around the value only
+        key = field.lower()
+        if key == "nid":
+            return card["note"] in {int(n) for n in value.split(",")}
+        if key == "deck":
+            return _like(value, card["deck"]) or _like(value + "::*", card["deck"])
+        if key == "tag":
+            return any(_like(value, t) or _like(value + "::*", t) for t in note["tags"])
+        if key == "note":
+            return _like(value, note["model"])
+        if key == "is" and value == "suspended":
+            return card["queue"] == -1
+        if key == "added":
+            return True
+        if key == "prop":
+            match = re.fullmatch(r"(lapses|ivl)(>=|<=|=|>|<)(\d+)", value)
+            actual = card["lapses" if match.group(1) == "lapses" else "ivl"]
+            return eval(f"{actual}{'==' if match.group(2) == '=' else match.group(2)}{int(match.group(3))}")  # noqa: S307
+        if value and field[:1].isupper():
+            return _like(value, plain(note["fields"].get(field, "")))
+        return any(term.lower() in plain(v).lower() for v in note["fields"].values())
+
+    def _find_cards(self, query: str) -> list[int]:
+        tokens = TOKEN.findall(query)
+        return sorted(cid for cid in self.cards if self._matches(cid, tokens))
+
     def _find_notes(self, query: str) -> list[int]:
-        model = re.search(r'note:"([^"]+)"', query)
-        field_match = re.search(r'"(\w+):((?:[^"\\]|\\.)*)"', query)
-        out = []
-        for note_id, note in self.notes.items():
-            if model and note["model"] != model.group(1):
-                continue
-            if field_match:
-                name, value = field_match.group(1), re.sub(r"\\(.)", r"\1", field_match.group(2))
-                if plain(note["fields"].get(name, "")).lower() != value.lower():
-                    continue
-            out.append(note_id)
-        return out
+        if not query.strip():
+            return sorted(self.notes)
+        return sorted({self.cards[cid]["note"] for cid in self._find_cards(query)})
 
     # API v1
 

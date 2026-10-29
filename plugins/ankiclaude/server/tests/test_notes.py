@@ -29,7 +29,7 @@ def vocab(word: str = "reluctant", **fields: str) -> NoteIn:
 
 
 async def ready(fake: FakeAnkiConnect, make_anki, **env: str):
-    anki = make_anki(fake, ANKI_AUTO_SYNC="false", **env)
+    anki = make_anki(fake, **{"ANKI_AUTO_SYNC": "false", **env})
     await anki.decks.setup()
     await anki.note_types.ensure()
     return anki

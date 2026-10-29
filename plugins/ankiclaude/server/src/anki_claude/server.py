@@ -17,7 +17,7 @@ from .anki import Anki
 from .ankiconnect import AnkiConnect
 from .config import load_config
 from .errors import AnkiError
-from .notes import NoteIn
+from .notes import DuplicateCandidate, NoteIn
 
 T = TypeVar("T")
 
@@ -132,6 +132,72 @@ def build_server(get_anki: Callable[[], Anki]) -> MCPServer:
         Дублікати не додаються — покажи їх користувачу. Після додавання сам синхронізує, якщо ввімкнено auto_sync.
         """
         return await run(lambda anki: anki.add_notes(notes, known=known))
+
+    @server.tool(annotations=READ_ONLY)
+    async def find_notes(
+        query: str,
+        limit: Annotated[int, Field(ge=1, le=200)] = 30,
+        with_fields: bool = True,
+    ) -> dict[str, Any]:
+        """Шукає нотатки синтаксисом пошуку Anki (напр. deck:"Den::ML" tag:topic::ml::metrics,
+        note:"AC Vocab" "Word:give up", added:7, prop:lapses>=3). Повертає поля, теги і картки
+        (шаблон, колода, інтервал, кількість забувань, чи призупинена)."""
+        return await run(lambda anki: anki.notes.find(query, limit, with_fields))
+
+    @server.tool(annotations=READ_ONLY)
+    async def check_duplicates(candidates: list[DuplicateCandidate]) -> dict[str, Any]:
+        """Перевіряє кандидатів у нові картки на дублікати перед превʼю: exact — така сама нотатка вже є,
+        similar — схожа (інша форма слова, близьке питання). Схожі покажи користувачу, а не дублюй."""
+        return await run(lambda anki: anki.notes.check_duplicates(candidates))
+
+    @server.tool(annotations=WRITES)
+    async def update_note_fields(note_id: int, fields: dict[str, str], known: bool = False) -> dict[str, Any]:
+        """Змінює поля однієї нотатки з тими самими перевірками, що й add_notes. У vocab: якщо Active стає yes —
+        створена картка UA→EN чекає закріплення EN→UA (known=true — одразу активна); якщо DrillForms стає yes —
+        картка форм чекає. Для правок багатьох нотаток спершу покажи план і отримай згоду користувача."""
+        return await run(lambda anki: anki.notes.update_fields(note_id, fields, known))
+
+    @server.tool(annotations=WRITES)
+    async def add_tags(note_ids: list[int], tags: list[str], confirm_token: str | None = None) -> dict[str, Any]:
+        """Додає теги нотаткам. Понад 20 нотаток — масова зміна: перший виклик повертає превʼю і confirm_token,
+        повторний виклик з токеном виконує, лише після явного «так» користувача."""
+        return await run(lambda anki: anki.notes.change_tags("add", note_ids, tags, anki.confirmations, confirm_token))
+
+    @server.tool(annotations=WRITES)
+    async def remove_tags(note_ids: list[int], tags: list[str], confirm_token: str | None = None) -> dict[str, Any]:
+        """Прибирає теги з нотаток (напр. leech після виправлення картки). Понад 20 нотаток — лише з confirm_token
+        після явного «так» користувача."""
+        return await run(lambda anki: anki.notes.change_tags("remove", note_ids, tags, anki.confirmations, confirm_token))
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, open_world_hint=False))
+    async def delete_notes(note_ids: list[int], confirm_token: str | None = None) -> dict[str, Any]:
+        """Видаляє нотатки з усіма картками й історією — незворотно. Перший виклик лише показує, що буде видалено,
+        і дає confirm_token. Видалення відбудеться тільки при повторному виклику з токеном — роби його лише
+        після того, як користувач побачив список і явно погодився."""
+        return await run(lambda anki: anki.notes.delete(note_ids, anki.confirmations, confirm_token))
+
+    @server.tool(annotations=READ_ONLY)
+    async def get_leeches(
+        min_lapses: Annotated[int, Field(ge=1, le=50)] = 4,
+        limit: Annotated[int, Field(ge=1, le=100)] = 30,
+    ) -> dict[str, Any]:
+        """Проблемні картки під кореневою колодою: з тегом leech або забуті щонайменше min_lapses разів.
+        Повертає нотатки з полями, тегами і проблемними картками, найгірші першими."""
+        return await run(lambda anki: anki.insights.leeches(min_lapses, limit))
+
+    @server.tool(annotations=READ_ONLY)
+    async def get_stats() -> dict[str, Any]:
+        """Статистика: картки до повторення сьогодні, повторено сьогодні і за 7 днів, кількість нотаток і карток,
+        призупинені, leech, відкладені UA→EN і форми, status::to-check, топ тем за тегами, ліміти колод."""
+        return await run(lambda anki: anki.insights.stats())
+
+    @server.tool(annotations=WRITES)
+    async def promote_cards(dry_run: bool = False, force: bool = False) -> dict[str, Any]:
+        """Розморожує відкладені картки слів: UA→EN, коли EN→UA закріпилась (інтервал ≥ promote_after_days),
+        і картку форм, коли закріпилась UA→EN. Спершу синхронізує (щоб врахувати повторення з телефону), потім
+        синхронізує ще раз. Якщо синхронізація не вдалась — нічого не розморожує. Якщо користувач зараз
+        повторює в desktop-Anki — відкладає (force=true лише з його згоди). dry_run — лише показати."""
+        return await run(lambda anki: anki.promote(dry_run=dry_run, force=force))
 
     return server
 

@@ -11,15 +11,16 @@ async def test_tools_are_registered(fake: FakeAnkiConnect, make_anki) -> None:
     anki = make_anki(fake)
     async with Client(build_server(lambda: anki)) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-    assert set(tools) == {
-        "check_connection", "get_config", "review_status", "sync",
-        "list_decks", "setup_decks", "create_deck", "set_deck_options",
-        "list_note_types", "ensure_note_types", "add_notes",
-    }
-    for name in ("check_connection", "get_config", "review_status", "list_decks", "list_note_types"):
+    read_only = {"check_connection", "get_config", "review_status", "list_decks", "list_note_types",
+                 "find_notes", "check_duplicates", "get_leeches", "get_stats"}
+    writes = {"sync", "setup_decks", "create_deck", "set_deck_options", "ensure_note_types", "add_notes",
+              "update_note_fields", "add_tags", "remove_tags", "delete_notes", "promote_cards"}
+    assert set(tools) == read_only | writes
+    for name in read_only:
         assert tools[name].annotations.read_only_hint is True, name
-    for name in ("sync", "setup_decks", "create_deck", "set_deck_options", "ensure_note_types", "add_notes"):
+    for name in writes:
         assert tools[name].annotations.read_only_hint is False, name
+    assert tools["delete_notes"].annotations.destructive_hint is True
     note_schema = tools["add_notes"].input_schema["$defs"]["NoteIn"]
     assert note_schema["properties"]["type"]["enum"] == ["concept", "cloze", "formula", "code", "vocab", "distinction"]
 

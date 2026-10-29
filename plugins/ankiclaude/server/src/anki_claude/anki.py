@@ -9,11 +9,14 @@ from typing import Any
 
 from .ankiconnect import AnkiConnect
 from .config import Config
+from .confirm import Confirmations
 from .constants import NOTE_TYPE_NAMES
 from .decks import Decks
+from .insights import Insights
 from .errors import CONFIGURE_HINT, AnkiActionError, AnkiError, AnkiOutdatedError, NotConfiguredError, SyncError
 from .models import NoteTypes
 from .notes import NoteIn, Notes
+from .promote import promote
 
 SYNC_TIMEOUT = 180.0
 SYNC_POLL_INTERVAL = 0.5
@@ -23,6 +26,14 @@ class Anki:
     def __init__(self, config: Config, client: AnkiConnect) -> None:
         self.config = config
         self.client = client
+        self.confirmations = Confirmations()
+
+    @cached_property
+    def insights(self) -> Insights:
+        return Insights(self.client, self.decks, self.notes)
+
+    async def promote(self, dry_run: bool = False, force: bool = False) -> dict[str, Any]:
+        return await promote(self, dry_run=dry_run, force=force)
 
     @cached_property
     def decks(self) -> Decks:
