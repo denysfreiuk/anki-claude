@@ -12,6 +12,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .errors import CONFIGURE_HINT
+
 DEFAULT_URL = "http://127.0.0.1:8765"
 LEVELS = ("A1", "A2", "B1", "B2", "C1", "C2")
 _TRUE = {"1", "true", "yes", "y", "on", "так"}
@@ -153,10 +155,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
     if root_deck is not None:
         root_deck = normalize_root_deck(root_deck) or None
     if root_deck is None:
-        warnings.append(
-            "Не задано кореневу колоду (root_deck). "
-            "Задай її: claude plugin configure ankiclaude@ankiclaude."
-        )
+        warnings.append(f"Не задано кореневу колоду (root_deck). {CONFIGURE_HINT}")
 
     url = (get("ANKI_CONNECT_URL") or DEFAULT_URL).rstrip("/")
     if not url.startswith(("http://", "https://")):

@@ -34,7 +34,10 @@
   у `${CLAUDE_PLUGIN_DATA}` і запускає їх базовим Python. Перший запуск ~6 с, далі ~2,5 с.
 - **`mcp` SDK 2.x**: FastMCP перейменовано на `MCPServer` (`mcp.server.mcpserver`) — це він.
 - Налаштування без діалогу: `claude plugin install ankiclaude@ankiclaude --config root_deck=Den`,
-  змінити потім: `claude plugin configure ankiclaude@ankiclaude`.
+  змінити потім: `/plugin` → Configure (`claude plugin configure` є лише з Claude Code 2.1.285; у тебе 2.1.274).
+- Плагін з маркетплейсу-папки твій Claude Code копіює в кеш (`~/.claude/plugins/cache/...`), а не читає
+  з проєкту. Тому кожен етап, який ти тестуєш, отримує нову `version` у plugin.json, і ти оновлюєш плагін
+  командою `claude plugin update ankiclaude@ankiclaude` + новий чат.
 - Тести лежать у `plugins/ankiclaude/server/tests/`; запуск: `uv run python -m pytest`.
 
 ## 0. Що я перевірив перед планом

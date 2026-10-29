@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+# `claude plugin configure` exists only since Claude Code 2.1.285; /plugin works in older versions too.
+CONFIGURE_HINT = (
+    "Змінити налаштування: у терміналі запусти claude → /plugin → Anki&Claude → Configure "
+    "(у Claude Code 2.1.285+ також: claude plugin configure ankiclaude@ankiclaude)."
+)
+
 
 class AnkiError(Exception):
     """Base error. `message` says what happened, `hint` says what to do."""
@@ -49,8 +55,7 @@ class AnkiAuthError(AnkiError):
     def __init__(self) -> None:
         super().__init__(
             "AnkiConnect відхилив запит: потрібен правильний API-ключ.",
-            "Вкажи ключ із налаштувань AnkiConnect (apiKey) у конфігу плагіна: "
-            "claude plugin configure ankiclaude@ankiclaude.",
+            f"Вкажи ключ із налаштувань AnkiConnect (apiKey) у конфігу плагіна. {CONFIGURE_HINT}",
         )
 
 
